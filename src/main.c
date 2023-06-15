@@ -33,7 +33,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <uncertain.h>
+#include <uxhw.h>
 
 const double pi = 3.14159265359;
 
@@ -117,11 +117,11 @@ loadDoubleDistFromPath(double * var, const char * filename)
 
 	if (var == NULL)
 	{
-		returnValue = libUncertainDoubleDistFromSamples(samples, sampleCount);
+		returnValue = UxHwDoubleDistFromSamples(samples, sampleCount);
 	}
 	else
 	{
-		(*var) = libUncertainDoubleDistFromSamples(samples, sampleCount);
+		(*var) = UxHwDoubleDistFromSamples(samples, sampleCount);
 	}
 
 	if (fclose(inp) != 0)
