@@ -1,0 +1,20 @@
+MinimumCore:
+      Class: C0
+      Microarchitecture: Athens
+      CorrelationTracking: Autocorrelation
+      MemorySize: 256000
+      Precision: 64
+
+TraceVariables:
+    - File: "main.c"
+      LineNumber: 48
+      Expression: "outputVariables[0]"
+
+BenchmarkingVariables:
+    - VariableName: outputVariables[0]
+      VariableDescription: Dynamic viscosity
+      OutputObject: Distribution
+      CommandLineArguments: -S 0
+
+BenchmarkingAllOutputs:
+    - CommandLineArguments: -S 0

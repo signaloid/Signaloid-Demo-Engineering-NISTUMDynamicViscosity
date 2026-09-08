@@ -1,135 +1,235 @@
-/*	Copyright (c) 2021, Orestis Kaparounakis.
+/*
+ *	Copyright (c) 2025-2026, Signaloid.
  *
- *	All rights reserved.
+ *	Permission is hereby granted, free of charge, to any person obtaining a copy
+ *	of this software and associated documentation files (the "Software"), to deal
+ *	in the Software without restriction, including without limitation the rights
+ *	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *	copies of the Software, and to permit persons to whom the Software is
+ *	furnished to do so, subject to the following conditions:
  *
- *	Redistribution and use in source and binary forms, with or without
- *	modification, are permitted provided that the following conditions
- *	are met:
- *	*	Redistributions of source code must retain the above
- *		copyright notice, this list of conditions and the following
- *		disclaimer.
- *	*	Redistributions in binary form must reproduce the above
- *		copyright notice, this list of conditions and the following
- *		disclaimer in the documentation and/or other materials
- *		provided with the distribution.
- *	*	Neither the name of the author nor the names of its
- *		contributors may be used to endorse or promote products
- *		derived from this software without specific prior written
- *		permission.
+ *	The above copyright notice and this permission notice shall be included in all
+ *	copies or substantial portions of the Software.
  *
- *	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *	FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *	COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *	INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *	BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *	LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *	LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *	ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *	POSSIBILITY OF SUCH DAMAGE.
+ *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *	SOFTWARE.
  */
-#include <math.h>
+
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <time.h>
 #include <uxhw.h>
+#include "common.h"
+#include "utilities.h"
+#include "kernel.h"
 
-const double pi = 3.14159265359;
 
-double loadDoubleDistFromPath(double * var, const char * filename);
 
 int
-main(int argc, char * argv[])
+main(int argc, char *  argv[])
 {
-	/*
-	 *	Variables
-	 */
-	double muC, rhoB, rhoC, rhoM, tM, tC, uppResult;
+	CommandLineArguments    arguments       = (CommandLineArguments) { 0 };
+	const char *            kMuCFilePath    = "samples-gaussian-dv_muC.csv";
+	const char *            kRhoBFilePath   = "samples-gaussian-dv_rhoB.csv";
+	const char *            kRhoCFilePath   = "samples-gaussian-dv_rhoC.csv";
+	const char *            kRhoMFilePath   = "samples-gaussian-dv_rhoM.csv";
+	const char *            kTcFilePath     = "samples-gaussian-dv_tC.csv";
+	const char *            kTmFilePath     = "samples-gaussian-dv_tM.csv";
+
+	double                      output;
+	double                      outputVariables[kOutputVariableIndexMax];
+	const char *                applicationDescription = "NIST Uncertainty Machine Dynamic Viscosity";
+	const char *                outputVariableNames[kOutputVariableIndexMax] = {
+		"Dynamic viscosity",
+	};
+	const char *                outputVariableDescriptions[kOutputVariableIndexMax] = {
+		"Dynamic viscosity of a sodium hydroxide solution in water",
+	};
+	kOutputVariableTypeIndex    outputVariableTypes[kOutputVariableIndexMax] = {
+		[kOutputVariableIndexFirstOutput] = kOutputVariableTypeDistribution,
+	};
+	double *                    monteCarloOutputSamples         = NULL;
+	MeanAndVariance             monteCarloOutputMeanAndVariance = { 0 };
+	clock_t                     start                   = 0;
+	clock_t                     end                     = 0;
+	double                      cpuTimeUsedInSeconds    = 0.0;
 
 	/*
-	 *	Load all samples from their respective files
+	 *	Get command line arguments.
 	 */
-	muC = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_muC.csv");
-	printf("muC = %lf\n", muC);
-
-	rhoB = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_rhoB.csv");
-	printf("rhoB = %lf\n", rhoB);
-
-	rhoC = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_rhoC.csv");
-	printf("rhoC = %lf\n", rhoC);
-
-	rhoM = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_rhoM.csv");
-	printf("rhoM = %lf\n", rhoM);
-
-	tC = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_tC.csv");
-	printf("tC = %lf\n", tC);
-
-	tM = loadDoubleDistFromPath(NULL, "samples-gaussian-dv_tM.csv");
-	printf("tM = %lf\n", tM);
-
-	/*
-	 *	Perform calculations as specified by the NIST Uncertainty Machine example
-	 */
-	uppResult = muC * ((rhoB - rhoM) / (rhoB - rhoC)) * (tM / tC);
-
-	/*
-	 *	Print the result
-	 */
-	printf("result = %lf\n", uppResult);
-
-	/*
-	 * Finished
-	 */
-	return EXIT_SUCCESS;
-}
-
-double
-loadDoubleDistFromPath(double * var, const char * filename)
-{
-	FILE *   inp;
-	int      sampleCount;
-	double * samples;
-	double   returnValue;
-
-	inp = fopen(filename, "r");
-	if (inp == NULL)
+	if (getCommandLineArguments(argc, argv, &arguments) != kCommonConstantReturnTypeSuccess)
 	{
-		printf("Could not open input file: %s\n", filename);
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
-	fscanf(inp, "%d\n", &sampleCount);
+	/*
+	 *	MonteCarlo output samples are used even in the UxHw use case to store
+	 *	the result of the single distributional draw.
+	 */
+	monteCarloOutputSamples =
+		(double *) checkedMalloc(
+			arguments.common.numberOfMonteCarloIterations * sizeof(double),
+			__FILE__,
+			__LINE__
+		);
 
-	printf("Number of samples from %s: %d\n", filename, sampleCount);
+	/*
+	 *	Read input distributions from CSV using preexisting method.
+	 *	The CSV files have more rows than kCommonConstantMaxNumberOfInputSamples
+	 */
+	arguments.muCSampleData     = loadDoubleSamplesFromPath(kMuCFilePath);
+	arguments.rhoBSampleData    = loadDoubleSamplesFromPath(kRhoBFilePath);
+	arguments.rhoCSampleData    = loadDoubleSamplesFromPath(kRhoCFilePath);
+	arguments.rhoMSampleData    = loadDoubleSamplesFromPath(kRhoMFilePath);
+	arguments.tCSampleData      = loadDoubleSamplesFromPath(kTcFilePath);
+	arguments.tMSampleData      = loadDoubleSamplesFromPath(kTmFilePath);
 
-	samples = calloc(sampleCount, sizeof(double));
-	if (samples == NULL)
+	/*
+	 *	Start timing if timing is enabled or in benchmarking mode.
+	 */
+	if (arguments.common.isTimingEnabled)
 	{
-		perror("error: could not allocate memory for samples");
-		exit(EXIT_FAILURE);
+		start = clock();
 	}
 
-	for (int i = 0; i < sampleCount; i++)
-	{
-		fscanf(inp, "%lf\n", &samples[i]);
-	}
+	bool isSelectedOutputScalar = (arguments.common.outputSelect != kOutputVariableIndexMax) &&
+	                              (outputVariableTypes[arguments.common.outputSelect] == kOutputVariableTypeScalar);
 
-	if (var == NULL)
+	if (arguments.common.isMonteCarloMode)
 	{
-		returnValue = UxHwDoubleDistFromSamples(samples, sampleCount);
+		output = calculateOutputMonteCarlo(&arguments, outputVariables, monteCarloOutputSamples);
+
+		/*
+		 *	If not doing UxHw version, then approximate the cost of the third phase of
+		 *	Monte Carlo (post-processing), by calculating the mean and variance.
+		 */
+		if (!isSelectedOutputScalar)
+		{
+			monteCarloOutputMeanAndVariance = calculateMeanAndVarianceOfDoubleSamples(monteCarloOutputSamples, arguments.common.numberOfMonteCarloIterations);
+			output = outputVariables[arguments.common.outputSelect] = monteCarloOutputMeanAndVariance.mean;
+		}
 	}
 	else
 	{
-		(*var) = UxHwDoubleDistFromSamples(samples, sampleCount);
+		output = calculateOutputUxHw(&arguments, outputVariables, monteCarloOutputSamples);
 	}
 
-	if (fclose(inp) != 0)
+
+	CommonCommandLineArguments printArguments = arguments.common;
+
+	if (arguments.common.isMonteCarloMode && isSelectedOutputScalar)
 	{
-		perror("warning: could not close input file");
+		printArguments.isMonteCarloMode             = false;
+		printArguments.numberOfMonteCarloIterations = 1;
 	}
 
-	free(samples);
+	/*
+	 *	Free samples arrays
+	 */
+	free(arguments.muCSampleData.samples);
+	free(arguments.rhoBSampleData.samples);
+	free(arguments.rhoCSampleData.samples);
+	free(arguments.rhoMSampleData.samples);
+	free(arguments.tCSampleData.samples);
+	free(arguments.tMSampleData.samples);
 
-	return returnValue;
+	/*
+	 *	Stop timing if timing is enabled or in benchmarking mode.
+	 */
+	if (arguments.common.isTimingEnabled)
+	{
+		end = clock();
+		cpuTimeUsedInSeconds = ((double) (end - start)) / CLOCKS_PER_SEC;
+	}
+
+	/*
+	 *	Print json outputs if in JSON output mode.
+	 */
+	if (arguments.common.isOutputJSONMode)
+	{
+		printJSONFormattedOutput(
+			&printArguments,
+			monteCarloOutputSamples,
+			outputVariables,
+			outputVariableDescriptions,
+			kOutputVariableIndexMax,
+			applicationDescription
+		);
+	}
+	/*
+	 *	Print human-consumable output if not in JSON output mode.
+	 */
+	else
+	{
+		printHumanConsumableOutput(
+			&printArguments,
+			kOutputVariableIndexMax,
+			outputVariables,
+			outputVariableNames,
+			outputVariableDescriptions,
+			monteCarloOutputSamples
+		);
+	}
+
+	/*
+	 *	Print timing if timing is enabled.
+	 */
+	if (arguments.common.isTimingEnabled)
+	{
+		printf("\nCPU time used: %" SignaloidParticleModifier "lf seconds\n", cpuTimeUsedInSeconds);
+	}
+
+
+	/*
+	 *	Save Monte Carlo data to "data.out" if in Monte Carlo mode.
+	 */
+	if (arguments.common.isMonteCarloMode)
+	{
+		size_t samplesToSave = isSelectedOutputScalar
+		                ? 1
+		                : arguments.common.numberOfMonteCarloIterations;
+
+		saveMonteCarloDoubleDataToDataDotOutFile(
+			monteCarloOutputSamples,
+			(uint64_t) (cpuTimeUsedInSeconds * 1000000),
+			samplesToSave
+		);
+	}
+	/*
+	 *	Save outputs to file if not in Monte Carlo mode and write to file is enabled.
+	 */
+	else
+	{
+		if (arguments.common.isWriteToFileEnabled)
+		{
+			if (writeOutputDoubleDistributionsToCSV(
+					arguments.common.outputFilePath,
+					outputVariables,
+					outputVariableNames,
+					kOutputVariableIndexMax
+			))
+			{
+				fprintf(stderr, "Error: Could not write to output CSV file \"%s\".\n", arguments.common.outputFilePath);
+
+				free(monteCarloOutputSamples);
+
+				return EXIT_FAILURE;
+			}
+		}
+	}
+
+	/*
+	 *	Free allocations.
+	 */
+	free(monteCarloOutputSamples);
+
+	return EXIT_SUCCESS;
 }
