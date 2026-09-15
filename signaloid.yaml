@@ -1,5 +1,5 @@
 MinimumCore:
-      Class: C0
+      Class: C0Pro
       Microarchitecture: Athens
       CorrelationTracking: Autocorrelation
       MemorySize: 256000
